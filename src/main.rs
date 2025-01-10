@@ -1,4 +1,6 @@
-use num_integer::Integer;
+pub mod operators;
+
+use operators::{Add, Concat, Inverse, Mul};
 use std::io::{self};
 
 fn main() {
@@ -15,40 +17,40 @@ fn main() {
         (test_value, remaining)
     });
 
-    let result: u64 = equations
-        .filter(|eq| is_equation_possible(eq.0, &eq.1[..]))
-        .map(|eq| eq.0)
-        .sum();
+    let mut operators: Vec<&dyn Inverse<u64, u64, u64>> = vec![&Add, &Mul];
+    let (possible_equations, not_possible_equations): (Vec<_>, Vec<_>) = equations
+        .partition(|eq| is_equation_possible_with_operators(eq.0, &eq.1[..], operators.as_slice()));
 
+    let result = possible_equations.into_iter().map(|eq| eq.0).sum::<u64>();
     println!("part 1: {}", result);
+
+    operators.push(&Concat);
+    let new_possible_equation = not_possible_equations
+        .into_iter()
+        .filter(|eq| is_equation_possible_with_operators(eq.0, &eq.1[..], operators.as_slice()));
+
+    let result = result + new_possible_equation.map(|eq| eq.0).sum::<u64>();
+    println!("part 2: {}", result);
 }
 
-fn is_equation_possible(goal: u64, numbers: &[u16]) -> bool {
+fn is_equation_possible_with_operators(
+    goal: u64,
+    numbers: &[u16],
+    operators: &[&dyn Inverse<u64, u64, u64>],
+) -> bool {
     if numbers.len() == 0 {
         return goal == 0;
     }
 
     let last_number = *numbers.last().unwrap() as u64;
     let rest_of_numbers = &numbers[0..numbers.len() - 1];
-    //insert + end
-    let possible_with_addition = match goal.checked_sub(last_number) {
-        Some(new_goal) => is_equation_possible(new_goal, rest_of_numbers),
-        None => false,
-    };
 
-    if possible_with_addition {
-        return true;
-    }
-
-    //insert * end
-    let possible_with_multiplication = match goal.div_rem(&last_number) {
-        (new_goal, 0) => is_equation_possible(new_goal, rest_of_numbers),
-        _ => false,
-    };
-
-    if possible_with_multiplication {
-        return true;
-    }
-
-    return false;
+    operators
+        .into_iter()
+        .any(|operator| match operator.inverse(goal, last_number) {
+            Some(new_goal) => {
+                is_equation_possible_with_operators(new_goal, rest_of_numbers, operators)
+            }
+            None => false,
+        })
 }
